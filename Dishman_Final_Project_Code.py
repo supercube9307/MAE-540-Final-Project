@@ -3,6 +3,9 @@ import pandas as pd
 import warnings
 import matplotlib.pyplot as plt
 import numpy as np
+from rocketpy import Environment, Flight, Function, MonteCarlo, Rocket, SolidMotor # type: ignore
+from rocketpy.utilities import apogee_by_mass, liftoff_speed_by_mass, fin_flutter_analysis # type: ignore
+
 
 # Suppress all FutureWarning messages
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -172,6 +175,8 @@ while m_pi > 0 :
     i = i + 1
     I_sum = I_sum + I_i
 
+F_is.index = t_is[0]
+
 print('\n')
 print('Mass of the Propellant: {0:.3f} lbm'.format(float(m_ps.max())))
 print('Area of the Throat at Burnout: {0:.3f} in^s'.format(float(A_ts.max())))
@@ -180,6 +185,7 @@ print('Average Specific Impulse: {0:.3f} s'.format(I_sum/(float(m_ps.max()))))
 print('Max Chamber Pressure: {0:.3f} psia'.format(float(P_cs.max())))
 print('Max Thrust: {0:.3f} lbf'.format(float(F_is.max())))
 print('A_p0/A_t0: {0:.3f} (-)'.format(A_p0/A_t0))
+
 
 plt.rcParams.update({'font.size': 14})
 plt.rcParams['axes.labelsize'] = 14
@@ -206,3 +212,21 @@ plt.plot(AeAts, c_fis)
 plt.xlabel("Area Ratio []]")
 plt.ylabel("Thrust Coefficient []")
 plt.show()
+
+Motor = SolidMotor(thrust_source="C:/Users/elena/OneDrive/Documents/MAE 440/Project/thrust_curve.csv",
+    dry_mass = 10/2.205,
+    dry_inertia = (0, 0, 0),
+    nozzle_radius = m.sqrt(A_e0/pi)/39.37,
+    grain_number = N,
+    grain_density = rho_p,
+    grain_outer_radius = r_0/39.37,
+    grain_initial_inner_radius = r_1/39.37,
+    grain_initial_height = L_0/39.37,
+    grain_separation = 0.125/39.37,
+    grains_center_of_mass_position = N*L_0/2/39.37,
+    center_of_dry_mass_position = N*L_0/2/39.37,
+    nozzle_position = -L_0/39.37/2+0.03,
+    burn_time = float(t_is.max()),
+    throat_radius = m.sqrt(A_t0/pi)/39.37,
+    coordinate_system_orientation = "nozzle_to_combustion_chamber",)
+Motor.draw()
