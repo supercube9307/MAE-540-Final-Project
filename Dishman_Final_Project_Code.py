@@ -14,7 +14,11 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 pi = m.pi
 c_star = 5210 #ft/s
 g = 32.2 #ft/s^2
-gamma = 1.25
+gamma_prop = 1.25
+gamma_air = 1.4
+Ru = 1545.3 # (ft-lbf)/(lbm*R)
+mw_air = 28.97
+R = Ru/mw_air * g
 a_0 = 0.03 #(in/s)[psi]^(-n)
 n = 0.35
 sigma_p = 0.001 #1/F
@@ -25,6 +29,7 @@ N = 4
 r_1 = 1 # in
 r_0 = 2.375 # in
 L_0 = 8 # in
+grain_spacing = 0.125
 A_t0 = 1 # in^2
 A_p0 = (r_1**2)*pi
 d_t = 2*m.sqrt(A_t0/pi)
@@ -33,6 +38,9 @@ A_e0 = E_0/A_t0
 D_rocket = 6.19
 A_rocket = (pi*(D_rocket/2)**2)/12**2
 web_step = 0.01
+m_case = N*(L_0 + grain_spacing)*0.25 #lbm -> 0.25lbm/in = denisty of case material
+m_ballast = 1 # lbm
+m_struct = 40 # lbm
 print('Rocket Cross-sectional Area: {0:.3f} ft^2'.format(A_rocket))
 
 def CF(gamma, AeAt, P1oP3):
@@ -86,13 +94,13 @@ def CF_Opt(AK, AreaRatio):
 
 def calc_atm(alt):
     if alt < 83000:
-        P_a = -4.272981E-14*alt**3 + 0.000000008060081*alt**2-0.0005482655*alt + 14.69241
+        P_a = -4.272981E-14*alt**3 + 0.000000008060081*alt**2 - 0.0005482655*alt + 14.69241
     else:
         P_a = 0.00001
     if alt<32809:
-        T_a = -0.0036*alt+518.399
+        T_a = -0.0036*alt+518
     else:
-        T_a = 0
+        T_a = 399
     if alt<82000:
         rho_a = (0.00000000001255)*alt**2-(0.0000019453)*alt+0.07579
     else:
@@ -115,32 +123,67 @@ def calc_r_b(T_b0, T_bi, P_c):
     r_b = a_0 * m.exp(sigma_p*(T_bi-T_b0)) * P_c**n
     return r_b
 
-i = 0
-w = 0
-I_i = 0
-I_sum = 0
-alt = 0.00001
-t_i = 0
-m_pi = 1
-m_ps = pd.DataFrame(); A_bs = pd.DataFrame(); AeAts = pd.DataFrame(); P_cs = pd.DataFrame(); F_is = pd.DataFrame()
-c_fis = pd.DataFrame(); t_is = pd.DataFrame(); A_ts = pd.DataFrame()
+def FindMach(gamma, AeAt):
+    StopCriteria = 0.000001 
+    EA = StopCriteria * 1.1 
+    AM2 = 1.5 
+    IterNo = 0 
+    while EA > StopCriteria and IterNo < 100:
+        IterNo = IterNo + 1  
+        AFUN = (2 + (gamma - 1) * AM2**2) / (gamma + 1)
+        BFUN = (gamma + 1) / (2 * (gamma - 1))
+        CFUN = 1 / AFUN
+        DFUN = 1 / AM2**2
+        DERFUN = ((AFUN)**BFUN) * (CFUN - DFUN)
+        FUNFUN = ((1 / AM2) * AFUN**BFUN) - AeAt
+        AMOLD = AM2 
+        AM2 = AM2 - FUNFUN / DERFUN 
+        EA = abs((AM2 - AMOLD) / AM2) * 100
+    M = AM2
+    return M
 
-print("{0:10s} {1:10s} {2:10s} {3:10s} {4:10s} {5:10s} {6:10s} {7:10s} {8:10s} {9:10s} {10:10s} {11:10s}".format(
-    '   w', '   m_pi', '   t_i', '   A_bi', '   A_ti', '   P_ci', '   P_ai', '   r_bi', '   E_i', '   c_fi', '   F_i', 
-    '   I_i',))
+i = 0; w = 0; I_i = 0; I_sum = 0; t_i = 0; m_pi = 1; h_i = 0; v_i = 0
+m_p0 = calc_m_p(w); m_0 = m_p0 + m_case + m_ballast + m_struct
+m_ps = pd.DataFrame(); A_bs = pd.DataFrame(); AeAts = pd.DataFrame(); P_cs = pd.DataFrame(); 
+F_is = pd.DataFrame(); c_fis = pd.DataFrame(); t_is = pd.DataFrame(); A_ts = pd.DataFrame(); 
+D_is = pd.DataFrame(); h_is = pd.DataFrame(); v_is = pd.DataFrame(); a_is = pd.DataFrame(); 
+
+# print("{0:10s} {1:10s} {2:10s} {3:10s} {4:10s} {5:10s} {6:10s} {7:10s} {8:10s} {9:10s} {10:10s} {11:10s}".format(
+#     '   w', '   m_pi', '   t_i', '   A_bi', '   A_ti', '   P_ci', '   P_ai', '   r_bi', '   E_i', '   c_fi', '   F_i', 
+#     '   I_i',))
+# print("---------- ---------- ---------- ---------- ---------- ---------- ---------- ----------"
+#         "---------- ---------- ---------- ----------")
+
+print("{0:10s} {1:10s} {2:10s} {3:10s} {4:10s} {5:10s} {6:10s} {7:10s} {8:10s} {9:10s} {10:10s} {11:10s} {12:10s}".format('t_i', 
+        'm_i', 'v_i', 'h_i', 'P_ai', 'T_ai', 'sos_i', 'M_i', 'CD_i', 'rho_ai', 'F/m', 'D/m', 'a_i', 'a_i (gs)'))
 print("---------- ---------- ---------- ---------- ---------- ---------- ---------- ----------"
-        "---------- ---------- ---------- ----------")
+        "---------- ---------- ---------- ---------- ----------")
+
 while m_pi > 0 :
     m_pi = calc_m_p(w)
+    m_i = (m_pi + m_case + m_ballast + m_struct)
     A_bi = calc_A_b(w)
     A_ti = pi*(d_t/2)**2
     P_ci = calc_P_c(T_b0, T_bi, A_bi, A_ti)
-    P_ai, T_ai, rho_ai = calc_atm(alt)
+    P_ai, T_ai, rho_ai = calc_atm(h_i)
     r_bi = calc_r_b(T_b0, T_bi, P_ci)
     E_i = A_e0/A_ti
-    c_fi = CF(gamma, E_i, P_ci/P_ai)
+    c_fi = CF(gamma_prop, E_i, P_ci/P_ai)
     F_i = c_fi * P_ci * A_ti
-    
+    sos_i = m.sqrt(gamma_air*R*T_ai)
+    M_i = v_i/sos_i
+    if M_i <= 0.6:
+        CD_i = 0.15
+    elif M_i <= 1.2:
+        CD_i = -0.12+0.45*M_i
+    elif M_i <= 1.8:
+        CD_i = 0.76-0.283*M_i
+    elif M_i<=4:
+        CD_i = 0.311-0.034*M_i
+    else:
+        CD_i = 0.175
+    D_i = 0.5 * rho_ai * v_i * abs(v_i)* CD_i * A_rocket
+    a_i = (F_i/m_i)*g - D_i/m_i - g
     if ((r_0-r_1)-w)<web_step:
         w_nxt = w + ((r_0-r_1)-w)
     else:
@@ -151,14 +194,16 @@ while m_pi > 0 :
     d_t_nxt = d_t + 0.000087 * (t_nxt - t_i) * P_ci
     A_t_nxt = pi*(d_t_nxt/2)**2
     P_c_nxt = calc_P_c(T_b0, T_bi, A_b_nxt, A_t_nxt)
-    P_a_nxt, T_a_nxt, rho_a_nxt = calc_atm(alt)
+    v_nxt = v_i + a_i*(t_nxt-t_i)
+    h_nxt = h_i + (v_nxt+v_i)/2 * (t_nxt-t_i)
+    P_a_nxt, T_a_nxt, rho_a_nxt = calc_atm(h_nxt)
     r_b = calc_r_b(T_b0, T_bi, P_c_nxt)
     E_nxt = A_e0/A_t_nxt
-    c_f_nxt = CF(gamma, E_nxt, P_c_nxt/P_a_nxt)
+    c_f_nxt = CF(gamma_prop, E_nxt, P_c_nxt/P_a_nxt)
     F_nxt = c_f_nxt * P_c_nxt * A_t_nxt
     I_nxt = (F_i + F_nxt)/2 * (t_nxt - t_i)
-    print("{0:10.3f} {1:10.3f} {2:10.3f} {3:10.3f} {4:10.3f} {5:10.3f} {6:10.3f} {7:10.3f} {8:10.3f} {9:10.3f} {10:10.3f} {11:10.3f}".format(w, m_pi, t_i, A_bi, A_ti, P_ci, P_ai, r_bi, E_i, c_fi, F_i, I_i))
-    
+    # print("{0:10.3f} {1:10.3f} {2:10.3f} {3:10.3f} {4:10.3f} {5:10.3f} {6:10.3f} {7:10.3f} {8:10.3f} {9:10.3f} {10:10.3f} {11:10.3f}".format(w, m_pi, t_i, A_bi, A_ti, P_ci, P_ai, r_bi, E_i, c_fi, F_i, I_i))
+    print("{0:10.3f} {1:10.3f} {2:10.3f} {3:10.3f} {4:10.3f} {5:10.3f} {6:10.3f} {7:10.3f} {8:10.3f} {9:10.3f} {10:10.6f} {11:10.6f} {12:10.6f}".format(t_i, m_i, v_i, h_i, P_ai, T_ai, sos_i, M_i, CD_i, rho_ai, F_i/m_i*g, D_i/m_i, a_i, a_i/g))     
     m_ps = pd.concat([m_ps, pd.Series(m_pi)])
     A_bs = pd.concat([A_bs, pd.Series(A_bi)])
     A_ts = pd.concat([A_ts, pd.Series(A_ti)])
@@ -167,15 +212,17 @@ while m_pi > 0 :
     F_is = pd.concat([F_is, pd.Series(F_i)])
     c_fis = pd.concat([c_fis, pd.Series(c_fi)])
     t_is = pd.concat([t_is, pd.Series(t_i)])
-
+    h_is = pd.concat([h_is, pd.Series(h_i)])
+    v_is = pd.concat([v_is, pd.Series(v_i)])
+    a_is = pd.concat([a_is, pd.Series(a_i)])
     I_i = I_nxt
     w = w_nxt
     t_i = t_nxt
     d_t = d_t_nxt
     i = i + 1
     I_sum = I_sum + I_i
-
-F_is.index = t_is[0]
+    v_i = v_nxt
+    h_i = h_nxt
 
 print('\n')
 print('Mass of the Propellant: {0:.3f} lbm'.format(float(m_ps.max())))
@@ -186,47 +233,124 @@ print('Max Chamber Pressure: {0:.3f} psia'.format(float(P_cs.max())))
 print('Max Thrust: {0:.3f} lbf'.format(float(F_is.max())))
 print('A_p0/A_t0: {0:.3f} (-)'.format(A_p0/A_t0))
 
+print('\n')
+print('Mass of the Case: {0:.4f} lbm'.format(m_case))
+print('Initial Mass of Vehicle: {0:.4f} lbm'.format(m_0))
+print('Burnout Height: {0:.4f} ft'.format(float(h_is.iloc[-1, 0])))
+print('Burnout Velocity: {0:.4f} ft/s'.format(float(v_is.iloc[-1, 0])))
+print('Burnout Acceleration: {0:.4f} ft^2/s'.format(float(a_is.iloc[-1, 0])))
+print('\n')
+
+print("{0:10s} {1:10s} {2:10s} {3:10s} {4:10s} {5:10s} {6:10s} {7:10s} {8:10s} {9:10s} {10:10s} {11:10s} {12:10s}".format('t_i', 
+        'm_i', 'v_i', 'h_i', 'P_ai', 'T_ai', 'sos_i', 'M_i', 'CD_i', 'rho_ai', 'F/m', 'D/m', 'a_i', 'a_i (gs)'))
+print("---------- ---------- ---------- ---------- ---------- ---------- ---------- ----------"
+        "---------- ---------- ---------- ---------- ----------")
+
+while h_i>=0: 
+    P_ai, T_ai, rho_ai = calc_atm(h_i)
+    sos_i = m.sqrt(gamma_air*R*T_ai)
+    M_i = v_i/sos_i
+    if M_i <= 0.6:
+        CD_i = 0.15
+    elif M_i <= 1.2:
+        CD_i = -0.12+0.45*M_i
+    elif M_i <= 1.8:
+        CD_i = 0.76-0.283*M_i
+    elif M_i<=4:
+        CD_i = 0.311-0.034*M_i
+    else:
+        CD_i = 0.175
+    
+    D_i = 0.5 * rho_ai * v_i * abs(v_i)* CD_i * A_rocket
+    a_i = (F_i/m_i)*g - D_i/m_i - g
+    t_nxt = t_i + 0.1
+    v_nxt = v_i + a_i*(t_nxt-t_i)
+    h_nxt = h_i + (v_nxt+v_i)/2 * (t_nxt-t_i)
+    P_a_nxt, T_a_nxt, rho_a_nxt = calc_atm(h_nxt)
+    F_nxt = 0
+    # print("{0:10.3f} {1:10.3f} {2:10.3f} {3:10.3f} {4:10.3f} {5:10.3f} {6:10.3f} {7:10.3f} {8:10.3f} {9:10.3f} {10:10.3f} {11:10.3f}".format(w, m_pi, t_i, A_bi, A_ti, P_ci, P_ai, r_bi, E_i, c_fi, F_i, I_i))
+    print("{0:10.3f} {1:10.3f} {2:10.3f} {3:10.3f} {4:10.3f} {5:10.3f} {6:10.3f} {7:10.3f} {8:10.3f} {9:10.3f} {10:10.6f} {11:10.6f} {12:10.6f}".format(t_i, m_i, v_i, h_i, P_ai, T_ai, sos_i, M_i, CD_i, rho_ai, F_i/m_i*g, D_i/m_i, a_i, a_i/g))  
+    m_ps = pd.concat([m_ps, pd.Series(m_pi)])
+    A_bs = pd.concat([A_bs, pd.Series(A_bi)])
+    A_ts = pd.concat([A_ts, pd.Series(A_ti)])
+    AeAts = pd.concat([AeAts, pd.Series(E_i)])
+    P_cs = pd.concat([P_cs, pd.Series(P_ci)])
+    F_is = pd.concat([F_is, pd.Series(F_i)])
+    c_fis = pd.concat([c_fis, pd.Series(c_fi)])
+    t_is = pd.concat([t_is, pd.Series(t_i)])
+    h_is = pd.concat([h_is, pd.Series(h_i)])
+    v_is = pd.concat([v_is, pd.Series(v_i)])
+    a_is = pd.concat([a_is, pd.Series(a_i)])
+    t_i = t_nxt
+    v_i = v_nxt
+    h_i = h_nxt
+    F_i = 0
+F_is.index = t_is[0]
+
+print('\n')
+print('Max Height: {0:.4f} ft'.format(float(h_is.max())))
+print('Max Velocity: {0:.4f} ft/s'.format(float(v_is.max())))
+print('Max Acceleration: {0:.4f} ft^2/s'.format(float(a_is.max())))
+print('Max Acceleration in gees: {0:.4f} ft/s'.format(float(a_is.max())/g))
 
 plt.rcParams.update({'font.size': 14})
 plt.rcParams['axes.labelsize'] = 14
-plt.plot(t_is, m_ps)
+# plt.plot(t_is, m_ps)
+# plt.xlabel("Time [s]")
+# plt.ylabel("Mass of Propellant [lbm]")
+# plt.xlim(0, float(t_is.max()))
+# # plt.ylim( , )
+# plt.show()
+
+# plt.plot(t_is, P_cs)
+# plt.xlabel("Time [s]")
+# plt.ylabel("Chamber Pressure [psia]")
+# plt.xlim(0, float(t_is.max()))
+# plt.show()
+
+# plt.plot(t_is, F_is)
+# plt.xlabel("Time [s]")
+# plt.ylabel("Thrust [lbf]")
+# plt.xlim(0, float(t_is.max()))
+# plt.show()
+
+# plt.plot(AeAts, c_fis)
+# plt.xlabel("Area Ratio []]")
+# plt.ylabel("Thrust Coefficient []")
+# plt.show()
+
+plt.plot(t_is, h_is)
 plt.xlabel("Time [s]")
-plt.ylabel("Mass of Propellant [lbm]")
+plt.ylabel("Height [ft]")
 plt.xlim(0, float(t_is.max()))
-# plt.ylim( , )
 plt.show()
 
-plt.plot(t_is, P_cs)
+plt.plot(t_is, v_is)
 plt.xlabel("Time [s]")
-plt.ylabel("Chamber Pressure [psia]")
+plt.ylabel("Velocity [ft/s]")
 plt.xlim(0, float(t_is.max()))
 plt.show()
 
-plt.plot(t_is, F_is)
+plt.plot(t_is, a_is)
 plt.xlabel("Time [s]")
-plt.ylabel("Thrust [lbf]")
+plt.ylabel("Acceleration [ft^2/s]")
 plt.xlim(0, float(t_is.max()))
 plt.show()
 
-plt.plot(AeAts, c_fis)
-plt.xlabel("Area Ratio []]")
-plt.ylabel("Thrust Coefficient []")
-plt.show()
-
-Motor = SolidMotor(thrust_source="C:/Users/elena/OneDrive/Documents/MAE 440/Project/thrust_curve.csv",
-    dry_mass = 10/2.205,
-    dry_inertia = (0, 0, 0),
-    nozzle_radius = m.sqrt(A_e0/pi)/39.37,
-    grain_number = N,
-    grain_density = rho_p,
-    grain_outer_radius = r_0/39.37,
-    grain_initial_inner_radius = r_1/39.37,
-    grain_initial_height = L_0/39.37,
-    grain_separation = 0.125/39.37,
-    grains_center_of_mass_position = N*L_0/2/39.37,
-    center_of_dry_mass_position = N*L_0/2/39.37,
-    nozzle_position = -L_0/39.37/2+0.03,
-    burn_time = float(t_is.max()),
-    throat_radius = m.sqrt(A_t0/pi)/39.37,
-    coordinate_system_orientation = "nozzle_to_combustion_chamber",)
-Motor.draw()
+# Motor = SolidMotor(thrust_source="C:/Users/elena/OneDrive/Documents/MAE 440/Project/thrust_curve.csv",
+#     dry_mass = 10/2.205,
+#     dry_inertia = (0, 0, 0),
+#     nozzle_radius = m.sqrt(A_e0/pi)/39.37,
+#     grain_number = N,
+#     grain_density = rho_p,
+#     grain_outer_radius = r_0/39.37,
+#     grain_initial_inner_radius = r_1/39.37,
+#     grain_initial_height = L_0/39.37,
+#     grain_separation = 0.125/39.37,
+#     grains_center_of_mass_position = N*L_0/2/39.37,
+#     center_of_dry_mass_position = N*L_0/2/39.37,
+#     nozzle_position = -L_0/39.37/2+0.03,
+#     burn_time = float(t_is.max()),
+#     throat_radius = m.sqrt(A_t0/pi)/39.37,
+#     coordinate_system_orientation = "nozzle_to_combustion_chamber",)
+# Motor.draw()
