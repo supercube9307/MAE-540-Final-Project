@@ -9,23 +9,24 @@ from rocketpy.utilities import apogee_by_mass, liftoff_speed_by_mass, fin_flutte
 # Suppress all FutureWarning messages
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
-# Given
+# Constants
 pi = m.pi
-c_star = 5210 #ft/s
-g = 32.2 #ft/s^2
+c_star = 5210       # ft/s
+g = 32.2            # ft/s^2
 gamma_prop = 1.25
 gamma_air = 1.4
-Ru = 1545.3 # (ft-lbf)/(lbm*R)
-mw_air = 28.97
-R = Ru/mw_air * g
-a_0 = 0.03 #(in/s)[psi]^(-n)
+Ru = 1545.3         # (ft·lbf)/(lbmol·°R)
+mw_air = 28.97      # kg/(mol)
+R = Ru/mw_air * g   # (ft·lbf)/(lb·°R)
+a_0 = 0.03          # (in/s)[psi]^(-n)
 n = 0.35
-sigma_p = 0.001 #1/F
-T_b0 = 70 # F 
-rho_p = 0.065 
-grain_spacing = 0.125
-D_rocket = 6.19
-A_rocket = (pi*(D_rocket/2)**2)/12**2
+sigma_p = 0.001     # 1/F
+T_b0 = 70           # F 
+rho_p = 0.065       # lbm/ft^3
+grain_spacing = 0.125   # in
+D_rocket = 6.19         # in
+A_rocket = (pi*(D_rocket/2)**2)/12**2   # ft^2
+
 print('Rocket Cross-sectional Area: {0:.3f} ft^2'.format(A_rocket))
 print('------------------------------------------------------\n')
 
@@ -128,22 +129,47 @@ def FindMach(gamma, AeAt):
     M = AM2
     return M
 
+def motor_draw(A_e0, N, r_0, r_1, L_0, A_t0, offset):
+    Motor = SolidMotor(thrust_source="C:/Users/elena/OneDrive/Documents/MAE 440/Project/thrust_curve.csv",
+        dry_mass = 10/2.205,
+        dry_inertia = (0, 0, 0),
+        nozzle_radius = m.sqrt(A_e0/pi)/39.37,
+        grain_number = N,
+        grain_density = rho_p,
+        grain_outer_radius = r_0/39.37,
+        grain_initial_inner_radius = r_1/39.37,
+        grain_initial_height = L_0/39.37,
+        grain_separation = 0.125/39.37,
+        grains_center_of_mass_position = N*L_0/2/39.37,
+        center_of_dry_mass_position = N*L_0/2/39.37,
+        nozzle_position = -L_0/39.37+offset,
+        burn_time = 2,
+        throat_radius = m.sqrt(A_t0/pi)/39.37,
+        coordinate_system_orientation = "nozzle_to_combustion_chamber",)
+    Motor.draw()
+    return
+
+varT_hs = pd.DataFrame(); varT_vs = pd.DataFrame(); varT_as = pd.DataFrame(); varT_gs = pd.DataFrame(); 
+
 def PR08D(N, r_1, r_0, L_0, A_t0, E_0, m_ballast, T_bi):
+    
     m_case = N*(L_0 + grain_spacing)*0.25 #lbm -> 0.25lbm/in = density of case material
-    A_p0 = (r_1**2)*pi
-    d_t = 2*m.sqrt(A_t0/pi)
-    A_e0 = E_0/A_t0  # 3.25
-    web_step = 0.01
-    m_struct = 40 # lbm
+    A_p0 = (r_1**2)*pi          # in^2
+    d_t = 2*m.sqrt(A_t0/pi)     # in
+    A_e0 = E_0/A_t0             # -
+    web_step = 0.01             # in
+    m_struct = 40               # lbm
+    
     print('Total Motor Casing Length (<34in): {0:.3f} in'.format(N*L_0 + N*grain_spacing))
     print('Initial Grain Port Area/Intial Throat Area (>2): {0:.3f}'.format(A_p0/A_t0))
     print('Ballast Mass (<1): {0:.3f} lbm'.format(m_ballast))
     i = 0; w = 0; I_i = 0; I_sum = 0; t_i = 0; m_pi = 1; h_i = 0; v_i = 0
-    m_p0 = calc_m_p(N, r_1, r_0, L_0, w); m_0 = m_p0 + m_case + m_ballast + m_struct
+    m_p0 = calc_m_p(N, r_1, r_0, L_0, w)
+    m_0 = m_p0 + m_case + m_ballast + m_struct
+    print('Intitial Takeoff Mass: {0:.3f} lbm'.format(m_0))
     m_ps = pd.DataFrame(); A_bs = pd.DataFrame(); AeAts = pd.DataFrame(); P_cs = pd.DataFrame(); 
     F_is = pd.DataFrame(); c_fis = pd.DataFrame(); t_is = pd.DataFrame(); A_ts = pd.DataFrame(); 
     D_is = pd.DataFrame(); h_is = pd.DataFrame(); v_is = pd.DataFrame(); a_is = pd.DataFrame(); 
-
     # print("{0:10s} {1:10s} {2:10s} {3:10s} {4:10s} {5:10s} {6:10s} {7:10s} {8:10s} {9:10s} {10:10s} {11:10s} {12:10s} {13:10s} {14:10s} {15:10s} {16:10s} {17:10s} {18:10s} {19:10s} {20:10s} {21:10s} {22:10s} {23:10s}".format(
     #     '   w', '   m_pi', '   t_i', '   A_bi', '   A_ti', '   P_ci', '   P_ai', '   r_bi', '   E_i', '   c_fi', '   F_i', 
     #     '   I_i', 'm_i', 'v_i', 'h_i', 'P_ai', 'T_ai', 'sos_i', 'M_i', 'CD_i', 'rho_ai', 'F/m', 'D/m', 'a_i', 'a_i (gs)'))
@@ -275,94 +301,100 @@ def PR08D(N, r_1, r_0, L_0, A_t0, E_0, m_ballast, T_bi):
         F_i = 0
     F_is.index = t_is[0]
 
-    print('Max Height: {0:.4f} ft'.format(float(h_is.max())))
-    print('Max Velocity: {0:.4f} ft/s'.format(float(v_is.max())))
-    print('Max Acceleration: {0:.4f} ft^2/s'.format(float(a_is.max())))
-    print('Max Acceleration in gees (<15): {0:.4f}'.format(float(a_is.max())/g))
-    return 
+    h_max = float(h_is.max())
+    v_max = float(v_is.max())
+    a_max = float(a_is.max())
+    g_max = float(a_is.max())/g
+    print('Max Height: {0:.4f} ft'.format(h_max))
+    print('Max Velocity: {0:.4f} ft/s'.format(v_max))
+    print('Max Acceleration: {0:.4f} ft^2/s'.format(a_max))
+    print('Max Acceleration in gees (<15): {0:.4f}'.format(g_max))
+    
+    plt.rcParams.update({'font.size': 14})
+    plt.rcParams['axes.labelsize'] = 14
+    plt.plot(t_is, m_ps)
+    plt.xlabel("Time [s]")
+    plt.ylabel("Mass of Propellant [lbm]")
+    plt.xlim(0, float(t_is.max()))
+    plt.show()
 
-#############################################################
+    plt.plot(t_is, P_cs)
+    plt.xlabel("Time [s]")
+    plt.ylabel("Chamber Pressure [psia]")
+    plt.xlim(0, float(t_is.max()))
+    plt.show()
+
+    plt.plot(t_is, F_is)
+    plt.xlabel("Time [s]")
+    plt.ylabel("Thrust [lbf]")
+    plt.xlim(0, float(t_is.max()))
+    plt.show()
+
+    plt.plot(AeAts, c_fis)
+    plt.xlabel("Area Ratio []]")
+    plt.ylabel("Thrust Coefficient []")
+    plt.show()
+
+    plt.plot(t_is, h_is)
+    plt.xlabel("Time [s]")
+    plt.ylabel("Height [ft]")
+    plt.xlim(0, float(t_is.max()))
+    plt.show()
+
+    plt.plot(t_is, v_is)
+    plt.xlabel("Time [s]")
+    plt.ylabel("Velocity [ft/s]")
+    plt.xlim(0, float(t_is.max()))
+    plt.show()
+
+    plt.plot(t_is, a_is)
+    plt.xlabel("Time [s]")
+    plt.ylabel("Acceleration [ft^2/s]")
+    plt.xlim(0, float(t_is.max()))
+    plt.show()
+    # motor_draw(A_e0, N, r_0, r_1, L_0, A_t0, 0.025)
+    return h_max, v_max, a_max
+
 print('Baseline:')
 PR08D(4, 1, 2.375, 8, 1, 4, 1, 70) 
 print('------------------------------------------------------\n')
-#############################################################
 print('5k:')
-PR08D(2, 1, 2.375, 3, 1, 3.2, 0.388, 70) 
+PR08D(2, 1, 2.375, 2.6, 0.5, 1.9, 0.135, 70) 
 print('------------------------------------------------------\n')
-#############################################################
+print('15k:')
+PR08D(4, 1, 2.375, 2.6, 0.85, 5.1, 0.87, 70) 
+print('------------------------------------------------------\n')
+
+varT_hs = pd.DataFrame(); varT_vs = pd.DataFrame(); varT_as = pd.DataFrame(); varT_gs = pd.DataFrame(); 
 print('10k:')
 print('---------------------(30F)---------------------')
-PR08D(3, 1, 2.375, 2.5, 1, 3.2, 0.729, 30) 
+h_max_30F, v_max_30F, a_max_30F = PR08D(3, 1, 2.375, 2.6, 0.85, 4, 0.297, 30) 
 print('\n')
 print('---------------------(70F)---------------------')
-PR08D(3, 1, 2.375, 2.5, 1, 3.2, 0.729, 70) 
+h_max_70F, v_max_70F, a_max_70F = PR08D(3, 1, 2.375, 2.6, 0.85, 4, 0.297, 70) 
 print('\n')
 print('---------------------(120F)---------------------')
-PR08D(3, 1, 2.375, 2.5, 1, 3.2, 0.729, 120) 
-print('------------------------------------------------------\n')
-#############################################################
-print('15k:')
-PR08D(4, 1, 2.375, 2.4, 1, 3.2, 0.698, 70) 
-print('------------------------------------------------------\n')
-#############################################################
-# plt.rcParams.update({'font.size': 14})
-# plt.rcParams['axes.labelsize'] = 14
-# plt.plot(t_is, m_ps)
-# plt.xlabel("Time [s]")
-# plt.ylabel("Mass of Propellant [lbm]")
-# plt.xlim(0, float(t_is.max()))
-# # plt.ylim( , )
-# plt.show()
+h_max_120F, v_max_120F, a_max_120F = PR08D(3, 1, 2.375, 2.6, 0.85, 4, 0.297, 120) 
 
-# plt.plot(t_is, P_cs)
-# plt.xlabel("Time [s]")
-# plt.ylabel("Chamber Pressure [psia]")
-# plt.xlim(0, float(t_is.max()))
-# plt.show()
 
-# plt.plot(t_is, F_is)
-# plt.xlabel("Time [s]")
-# plt.ylabel("Thrust [lbf]")
-# plt.xlim(0, float(t_is.max()))
-# plt.show()
+varTs = pd.DataFrame([30, 70, 120])
+varT_hs = pd.DataFrame([h_max_30F, h_max_70F, h_max_120F])
+plt.plot(varTs, varT_hs, 'bo-')
+plt.xlabel("Initial Propellant Temperature [F]")
+plt.ylabel("Max Altiude [ft]")
+plt.xlim(float(varTs.min()), float(varTs.max()))
+plt.show()
 
-# plt.plot(AeAts, c_fis)
-# plt.xlabel("Area Ratio []]")
-# plt.ylabel("Thrust Coefficient []")
-# plt.show()
+varT_vs = pd.DataFrame([v_max_30F, v_max_70F, v_max_120F])
+plt.plot(varTs, varT_vs, 'bo-')
+plt.xlabel("Initial Propellant Temperature [F]")
+plt.ylabel("Max Velocity [ft/s]")
+plt.xlim(float(varTs.min()), float(varTs.max()))
+plt.show()
 
-# plt.plot(t_is, h_is)
-# plt.xlabel("Time [s]")
-# plt.ylabel("Height [ft]")
-# plt.xlim(0, float(t_is.max()))
-# plt.show()
-
-# plt.plot(t_is, v_is)
-# plt.xlabel("Time [s]")
-# plt.ylabel("Velocity [ft/s]")
-# plt.xlim(0, float(t_is.max()))
-# plt.show()
-
-# plt.plot(t_is, a_is)
-# plt.xlabel("Time [s]")
-# plt.ylabel("Acceleration [ft^2/s]")
-# plt.xlim(0, float(t_is.max()))
-# plt.show()
-
-# Motor = SolidMotor(thrust_source="C:/Users/elena/OneDrive/Documents/MAE 440/Project/thrust_curve.csv",
-#     dry_mass = 10/2.205,
-#     dry_inertia = (0, 0, 0),
-#     nozzle_radius = m.sqrt(A_e0/pi)/39.37,
-#     grain_number = N,
-#     grain_density = rho_p,
-#     grain_outer_radius = r_0/39.37,
-#     grain_initial_inner_radius = r_1/39.37,
-#     grain_initial_height = L_0/39.37,
-#     grain_separation = 0.125/39.37,
-#     grains_center_of_mass_position = N*L_0/2/39.37,
-#     center_of_dry_mass_position = N*L_0/2/39.37,
-#     nozzle_position = -L_0/39.37/2+0.03,
-#     burn_time = float(t_is.max()),
-#     throat_radius = m.sqrt(A_t0/pi)/39.37,
-#     coordinate_system_orientation = "nozzle_to_combustion_chamber",)
-# Motor.draw()
+varT_as = pd.DataFrame([a_max_30F/g, a_max_70F/g, a_max_120F/g])
+plt.plot(varTs, varT_as, 'bo-')
+plt.xlabel("Initial Propellant Temperature [F]")
+plt.ylabel("Max Acceleration (a_max/g_0)")
+plt.xlim(float(varTs.min()), float(varTs.max()))
+plt.show()
