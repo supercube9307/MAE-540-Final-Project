@@ -1,18 +1,21 @@
 import math
+import statistics as stat
 
 def centered_difference(function, position, step_size):
 	dfunction = (function(position + step_size)-function(position-step_size))/(2*step_size)
 	return dfunction
 
-def test_partial_argument(function,argument_index,position):
-	#return new function with inputs as position except for argument at argument index
-	def new_function(argument):
-		new_position = [x for x in position]
-		new_position[argument_index] = argument
-		return(function(*new_position))
-	return new_function
 
 def d_test_d_argument(function,position,argument_index,step_size):
+
+	def test_partial_argument(function,argument_index,position):
+	#return new function with inputs as position except for argument at argument index
+		def new_function(argument):
+			new_position = [x for x in position]
+			new_position[argument_index] = argument
+			return(function(*new_position))
+		return new_function
+
 	return centered_difference(test_partial_argument(function,argument_index,position),position[argument_index],step_size)
 
 def gradient(function, position, step_size):
@@ -28,67 +31,83 @@ def gradient(function, position, step_size):
 
 def gradient_normalized(function, position, step_size):
 
-	gradient_vector = gradient(function, position, step_size)
 	gradient_magnitude = 0
-	dimension = range(len(gradient_vector))
+	gradient_vector = gradient(function, position, step_size)
 
-	for index in dimension:
+	for index in range(len(gradient_vector)):
 		gradient_magnitude += gradient_vector[index]**2
 
 	gradient_magnitude = gradient_magnitude**0.5
 
-	for index in dimension:
+	if gradient_magnitude == 0:
+		gradient_magnitude = 1
+
+	for index in range(len(gradient_vector)):
 		gradient_vector[index] = gradient_vector[index]/gradient_magnitude
+
 	return gradient_vector
 
+def gradient_descent(error_tolerance, function, position_input, step_size, max_iterations=1000, debug=False, debug_precision=5):
 
-def gradient_descent(error_tolerance, function, position_input, gradient_step_size, CD_step_size):
-	if CD_step_size < gradient_step_size:
-		print("Warning, center difference approximation step size smaller than gradient step size, may lead to erratic behavior due to overshooting")
 	position = [x for x in position_input]
-	error = error_tolerance + 1
 	dimension = range(len(position))
-	old_value = 999
 	iterations = 0
-	while error > error_tolerance:
-		if iterations > 1000:
-			return(position, value)
-			break
+	previous_values = [0]*20
+
+	# gradent step size should be radius of insphere of n-dim octahedron sampled by center difference method
+	# weird math thing to make sure gradient step doesn't exceed region sampled by center difference
+
+	gradient_step_size = step_size
+	CD_step_size = 10 * step_size * max(dimension)**0.5
+
+	while True:
 		value = function(*position)
-		error = abs(value-old_value)
+		previous_values[iterations % len(previous_values)] = value
+		deviation = stat.stdev(previous_values)
 		gradient_vector = gradient_normalized(function,position,CD_step_size)
 
-		print(f"Iterations: {iterations}")
-		print(f"Value: {round(value)}")
-		#print(f"Error: {round(error)}")
-		print(f"Position: {[round(x,5) for x in position]}")
-		print(f"Gradient: {[round(x,5) for x in gradient_vector]}")
-		print("")
+		if debug and iterations % 100 == 0:
+			debug_output =  f"Standard Deviation: {round(deviation,debug_precision)}\n" \
+					f"Iterations: {iterations}\n" \
+					f"Value: {round(value,debug_precision)}\n" \
+					f"Position: {[round(x,debug_precision) for x in position]}\n" \
+					f"Direction: {[round(-x,debug_precision) for x in gradient_vector]}\n"
+			print(debug_output)
+
+		# do the actual descent part
 		for index in dimension:
 			position[index] = position[index] - gradient_vector[index] * gradient_step_size
-		old_value = value
+
+		if deviation < error_tolerance:
+			break
+
+		if iterations > max_iterations:
+			print("Max Iterations Reached")
+			break
+
 		iterations += 1
+
 	return(position, value)
 
 if __name__ == "__main__":
 
-	def test_function (x,y):
-		f = (x+1)**2 + y**2 + 1
+	def test_function (x,y,z):
+		f = (x+1)**2 + y**2 + (z-2)**4 + 1
 		return f
 
-	location = [1,2]
-	CD_step_size = 0.0000001
-	gradient_step_size = 0.1
+	location = [1,2,5]
 	error_tolerance = 0.001
 
-	output = gradient_descent(error_tolerance,test_function,location,gradient_step_size,CD_step_size)
+	gradient_step_size = 0.1
+	output = gradient_descent(error_tolerance,test_function,location,gradient_step_size,debug=True)
 	print(output)
-	print("\nChanging step Size\n")
 
-	gradient_step_size = 0.001
-	error_tolerance = 0.0000001
+	print("\nChanging step Size to 0.01\n")
 
-	print(gradient_descent(error_tolerance,test_function,location,gradient_step_size,CD_step_size))
+	gradient_step_size = 0.01
+	output = gradient_descent(error_tolerance,test_function,location,gradient_step_size)
+	print(output)
+
 
 
 
