@@ -66,7 +66,7 @@ def gradient_descent(error_tolerance, function, position_input, step_size, max_i
 		deviation = stat.stdev(previous_values)
 		gradient_vector = gradient_normalized(function,position,CD_step_size)
 
-		if debug and iterations % 100 == 0:
+		if debug:
 			debug_output =  f"Standard Deviation: {round(deviation,debug_precision)}\n" \
 					f"Iterations: {iterations}\n" \
 					f"Value: {round(value,debug_precision)}\n" \
@@ -82,7 +82,6 @@ def gradient_descent(error_tolerance, function, position_input, step_size, max_i
 			break
 
 		if iterations > max_iterations:
-			print("Max Iterations Reached")
 			break
 
 		iterations += 1

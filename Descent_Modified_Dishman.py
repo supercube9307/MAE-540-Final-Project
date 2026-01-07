@@ -2,15 +2,13 @@ import math as m
 import random
 import Gradient_Descent_Test as GD
 
-def CF(gamma, AeAt, P1oP3, StopCriteria = 0.001, AM2 = 3, IterNo = 0):
-    EA = StopCriteria * 1.1
+def CF(gamma, AeAt, P1oP3, AM2 = 3, IterNo = 0):
     P3oP1 = 1 / P1oP3
 
     AM2 = FindMach(AeAt,gamma)
-
     P2oP1 = (1 + 0.5 * (gamma - 1) * AM2 ** 2) ** (-gamma / (gamma - 1))
 
-    TERM1 = 2 * gamma * gamma / (gamma - 1)
+    TERM1 = (2 * gamma * gamma / (gamma - 1))
     TERM2 = 2 / (gamma + 1)
     TERM3 = (gamma + 1) / (gamma - 1)
     TERM4 = (gamma - 1) / gamma
@@ -56,21 +54,7 @@ def calc_atm(alt):
 
     return [P_a, T_a, rho_a]
 
-def calc_A_b(w, N, r_1, r_0, L_0):
-    A_b = N*2*m.pi*((r_1+w)*(L_0-2*w) + (r_0**2 - (r_1+w)**2))
-    return A_b
 
-def calc_P_c(T_b0, T_bi, A_b, A_t, a_0, sigma_p, rho_p, c_star, g, n):
-    P_c = (a_0 * m.exp(sigma_p*(T_bi-T_b0))*(rho_p*c_star/g)*(A_b/A_t))**(1/(1-n))
-    return P_c
-
-def calc_r_b(T_b0, T_bi, P_c, a_0, sigma_p, n):
-    r_b = a_0 * m.exp(sigma_p*(T_bi-T_b0)) * P_c**n
-    return r_b
-
-def calc_m_p(w, N, rho_p, r_0, r_1, L_0):
-    m_p = N*rho_p*(m.pi*(r_0*r_0-(r_1+w)*(r_1+w))*(L_0-2*w))
-    return m_p
 
 def apogee_function(case_length, number_grains, inner_radius, outer_radius, grain_length, mass_ballast, throat_area, expansion_ratio):
 
@@ -111,7 +95,8 @@ def apogee_function(case_length, number_grains, inner_radius, outer_radius, grai
 	m_case = case_length*0.25 #lbm -> 0.25lbm/in = denisty of case material
 
 	i = 0; w = 0; I_i = 0; I_sum = 0; t_i = 0; m_pi = 1; h_i = 0; v_i = 0; P_cmax = 0
-	m_p0 = calc_m_p(w, N, rho_p, r_0, r_1, L_0); m_0 = m_p0 + m_case + m_ballast + m_struct
+	m_p0 = N*rho_p*(m.pi*(r_0*r_0-(r_1)*(r_1))*(L_0))
+	m_0 = m_p0 + m_case + m_ballast + m_struct
 	h_max = 0
 	a_max = 0
 
@@ -121,15 +106,15 @@ def apogee_function(case_length, number_grains, inner_radius, outer_radius, grai
 
 	while m_pi > 0.0000000001 :
 
-	    m_pi = calc_m_p(w, N, rho_p, r_0, r_1, L_0)
+	    m_pi = N*rho_p*(m.pi*(r_0*r_0-(r_1+w)*(r_1+w))*(L_0-2*w))
 	    m_i = (m_pi + m_case + m_ballast + m_struct)
-	    A_bi = calc_A_b(w, N, r_1, r_0, L_0)
+	    A_bi = N*2*m.pi*((r_1+w)*(L_0-2*w) + (r_0**2 - (r_1+w)**2))
 	    A_ti = pi*(d_t/2)**2
-	    P_ci = calc_P_c(T_b0, T_bi, A_bi, A_ti, a_0, sigma_p, rho_p, c_star, g, n)
+	    P_ci = (a_0 * m.exp(sigma_p*(T_bi-T_b0))*(rho_p*c_star/g)*(A_bi/A_ti))**(1/(1-n))
 
 	    [P_ai, T_ai, rho_ai] = calc_atm(h_i)
 	    sos_i = m.sqrt(gamma_air*R*T_ai)
-	    r_bi = calc_r_b(T_b0, T_bi, P_ci, a_0, sigma_p, n)
+	    r_bi = a_0 * m.exp(sigma_p*(T_bi-T_b0)) * P_ci**n
 
 	    E_i = A_e0/A_ti
 	    c_fi = CF(gamma_prop, E_i, P_ci/P_ai)
@@ -157,15 +142,15 @@ def apogee_function(case_length, number_grains, inner_radius, outer_radius, grai
 	        w_nxt = w + web_step
 
 	    t_nxt = t_i + (w_nxt-w)/r_bi
-	    m_p_nxt = calc_m_p(w_nxt, N, rho_p, r_0, r_1, L_0)
-	    A_b_nxt = calc_A_b(w_nxt, N, r_1, r_0, L_0)
+	    m_p_nxt = N*rho_p*(m.pi*(r_0*r_0-(r_1+w_nxt)*(r_1+w_nxt))*(L_0-2*w))
+	    A_b_nxt = N*2*m.pi*((r_1+w)*(L_0-2*w_nxt) + (r_0**2 - (r_1+w_nxt)**2))
 	    d_t_nxt = d_t + 0.000087 * (t_nxt - t_i) * P_ci
 	    A_t_nxt = pi*(d_t_nxt/2)**2
-	    P_c_nxt = calc_P_c(T_b0, T_bi, A_b_nxt, A_t_nxt, a_0, sigma_p, rho_p, c_star, g, n)
+	    P_c_nxt = (a_0 * m.exp(sigma_p*(T_bi-T_b0))*(rho_p*c_star/g)*(A_b_nxt/A_t_nxt))**(1/(1-n))
 	    v_nxt = v_i + a_i*(t_nxt-t_i)
 	    h_nxt = h_i + (v_nxt+v_i)/2 * (t_nxt-t_i)
 	    P_a_nxt, T_a_nxt, rho_a_nxt = calc_atm(h_nxt)
-	    r_b = calc_r_b(T_b0, T_bi, P_c_nxt, a_0, sigma_p, n)
+	    r_b = a_0 * m.exp(sigma_p*(T_bi-T_b0)) * P_c_nxt**n
 	    E_nxt = A_e0/A_t_nxt
 	    c_f_nxt = CF(gamma_prop, E_nxt, P_c_nxt/P_a_nxt)
 	    F_nxt = c_f_nxt * P_c_nxt * A_t_nxt
@@ -230,7 +215,7 @@ def check_configuration(N_5k, N_10k, N_15k, inner_radius, outer_radius, grain_le
 		N_15k = round(N_15k,0)
 
 	error_output = ""
-	error_messages = ["5k", "10k", "15k"]
+	error_messages = [" 5k", "10k", "15k"]
 	grain_spacing = 0.125
 	max_grains = max(N_5k, N_10k, N_15k)
 	case_length = max_grains*(grain_length+grain_spacing)
@@ -255,7 +240,7 @@ def check_configuration(N_5k, N_10k, N_15k, inner_radius, outer_radius, grain_le
 
 	if ballast > 1:
 		constraint_error_multiplier += ballast
-		error_output += f"Ballast (<1): {round(balast,3)}\n"
+		error_output += f"Ballast (<1): {round(ballast,3)}\n"
 
 	if ballast < 0:
 		constraint_error_multiplier += (-ballast) + 1
@@ -286,7 +271,7 @@ def check_configuration(N_5k, N_10k, N_15k, inner_radius, outer_radius, grain_le
 
 		if pc_max > 1000:
 			constraint_error_multiplier += pc_max/1000
-			error_output += "Chamber Pressure in " + error_messages[index] + f" Case (<1000): {round(Chamber_Pressure,1)}\n"
+			error_output += "Chamber Pressure in " + error_messages[index] + f" Case (<1000): {round(pc_max,1)}\n"
 		if a_max > 15:
 			constraint_error_multiplier += a_max/15
 			error_output += "Acceleration in " + error_messages[index] + f" Case (<15): {round(a_max,2)}\n"
@@ -346,20 +331,20 @@ def pretty_output(position):
 
 # define operating parameters
 
-fractional_grains = True
-random_seed = False
+fractional_grains = False
+random_seed = True
 ignore_solved_cases = False
 gradient_debug_output = False
 configuration_debug_output = True
 run = True
 
-step_size = 0.000001
+step_size = 0.1
 alt_diff_exponent = 2
 constraint_error_base = 1000
-grain_error_base = 100
+grain_error_base = 1.1
 
 error_tolerance = 0
-update_interval = 100
+update_interval = 10
 max_iterations = 10000
 
 # setup initial guess
@@ -367,10 +352,21 @@ max_iterations = 10000
 initial_guess = [7.0, 8.0, 9.0, 1.7897980649, 2.4946672557, 2.4239819896, 0.6621373368, 4.8787486621, 4.3774970358]
 
 if random_seed:
-	guess_limits = [[0,3],[3,6],[6,9],[0,1],[1,2.375],[1,3],[0,1],[1,2],[2,4]]
-	initial_guess = []
-	for limit_pair in guess_limits:
-		initial_guess.append(random.uniform(*limit_pair))
+	valid = False
+	while not valid:
+		# generate an initial guess
+		guess_limits = [[1,4],[5,6],[6,8],[0.5,1.5],[1.5,2.375],[1,3],[0,1],[0.25,1],[2,4]]
+		initial_guess = []
+		for limit_pair in guess_limits:
+			initial_guess.append(random.uniform(*limit_pair))
+
+		# check if all 3 configurations leave the launchpad
+		low_diff, mid_diff, high_diff = altitude_function(*initial_guess)
+		low_valid = low_diff > -5000
+		mid_valid = mid_diff > -10000
+		high_valid = high_diff > -15000
+		if low_valid and mid_valid and high_valid:
+			valid = True
 
 updated_guess = [x for x in initial_guess]
 
@@ -383,7 +379,6 @@ if run:
 	try:
 		iterations = 1
 		while iterations < max_iterations:
-
 			[updated_guess, value] = GD.gradient_descent(error_tolerance,error_function,updated_guess,step_size,debug=gradient_debug_output,debug_precision=7,max_iterations=1)
 
 			if iterations % update_interval == 0:
@@ -392,8 +387,8 @@ if run:
 
 				if configuration_debug_output == True:
 					print(check_configuration(*updated_guess)[-1])
-
 			iterations += 1
+
 
 
 	except KeyboardInterrupt:
